@@ -64,7 +64,13 @@ interface ApplicationState {
 
   getApplicationsByStatus: (status: ApplicationStatus) => Application[];
   getMyApplications: (applicantId: string) => Application[];
+
+  resetAllData: () => void;
 }
+
+const STORAGE_KEY = 'asset_disposal_applications_v1';
+const APPROVAL_STORAGE_KEY = 'asset_disposal_approvals_v1';
+const HANDOVER_STORAGE_KEY = 'asset_disposal_handover_v1';
 
 const nodeNameMap: Record<string, string> = {
   pending_dept: '部门负责人审批',
@@ -85,12 +91,25 @@ const nextNodeMap: Record<
   pending_executive: { status: 'completed', node: 'completed' },
 };
 
-const roleToNodeMap: Record<string, string> = {
-  dept_head: 'pending_dept',
-  admin: 'pending_admin',
-  finance: 'pending_finance',
-  executive: 'pending_executive',
-};
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      return JSON.parse(raw) as T;
+    }
+  } catch {
+    // ignore
+  }
+  return fallback;
+}
+
+function saveToStorage<T>(key: string, data: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // ignore
+  }
+}
 
 function generateApplicationNo() {
   const date = new Date();
@@ -111,23 +130,84 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
 
   initializeData: () => {
     if (get().isInitialized) return;
+
+    const storedApps = loadFromStorage<Application[] | null>(STORAGE_KEY, null);
+    const storedRecords = loadFromStorage<Record<string, ApprovalRecord[]> | null>(
+      APPROVAL_STORAGE_KEY,
+      null
+    );
+    const storedHandovers = loadFromStorage<Record<string, HandoverRecord> | null>(
+      HANDOVER_STORAGE_KEY,
+      null
+    );
+
+    const defaultRecords = mockApprovalRecords.reduce(
+      (acc, record) => {
+        if (!acc[record.applicationId]) {
+          acc[record.applicationId] = [];
+        }
+        acc[record.applicationId].push(record);
+        return acc;
+      },
+      {} as Record<string, ApprovalRecord[]>
+    );
+
+    let baseApps = storedApps || mockApplications;
+    let baseRecords = storedRecords || defaultRecords;
+    let baseHandovers = storedHandovers || {};
+
+    let needsMigration = false;
+    baseApps = baseApps.map((app) => {
+      if (app.status === 'approved' || app.currentNode === 'approved') {
+        needsMigration = true;
+        return {
+          ...app,
+          status: 'completed' as ApplicationStatus,
+          currentNode: 'completed',
+        };
+      }
+      return app;
+    });
+
+    if (needsMigration) {
+      saveToStorage(STORAGE_KEY, baseApps);
+      saveToStorage(APPROVAL_STORAGE_KEY, baseRecords);
+      saveToStorage(HANDOVER_STORAGE_KEY, baseHandovers);
+    }
+
     set({
-      applications: mockApplications,
-      approvalRecords: mockApprovalRecords.reduce(
-        (acc, record) => {
-          if (!acc[record.applicationId]) {
-            acc[record.applicationId] = [];
-          }
-          acc[record.applicationId].push(record);
-          return acc;
-        },
-        {} as Record<string, ApprovalRecord[]>
-      ),
+      applications: baseApps,
+      approvalRecords: baseRecords,
+      handoverRecords: baseHandovers,
       isInitialized: true,
     });
   },
 
-  setApplications: (applications) => set({ applications }),
+  resetAllData: () => {
+    const defaultRecords = mockApprovalRecords.reduce(
+      (acc, record) => {
+        if (!acc[record.applicationId]) {
+          acc[record.applicationId] = [];
+        }
+        acc[record.applicationId].push(record);
+        return acc;
+      },
+      {} as Record<string, ApprovalRecord[]>
+    );
+    set({
+      applications: mockApplications,
+      approvalRecords: defaultRecords,
+      handoverRecords: {},
+    });
+    saveToStorage(STORAGE_KEY, mockApplications);
+    saveToStorage(APPROVAL_STORAGE_KEY, defaultRecords);
+    saveToStorage(HANDOVER_STORAGE_KEY, {});
+  },
+
+  setApplications: (applications) => {
+    set({ applications });
+    saveToStorage(STORAGE_KEY, applications);
+  },
 
   addApplication: (application) =>
     set((state) => {
@@ -135,54 +215,69 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
         ...application,
         applicationNo:
           application.applicationNo || generateApplicationNo(),
+        createdAt: application.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
-      return { applications: [...state.applications, newApp] };
+      const newApps = [...state.applications, newApp];
+      saveToStorage(STORAGE_KEY, newApps);
+      return { applications: newApps };
     }),
 
   updateApplication: (id, data) =>
-    set((state) => ({
-      applications: state.applications.map((a) =>
+    set((state) => {
+      const newApps = state.applications.map((a) =>
         a.id === id ? { ...a, ...data, updatedAt: new Date().toISOString() } : a
-      ),
-    })),
+      );
+      saveToStorage(STORAGE_KEY, newApps);
+      return { applications: newApps };
+    }),
 
   deleteApplication: (id) =>
-    set((state) => ({
-      applications: state.applications.filter((a) => a.id !== id),
-    })),
+    set((state) => {
+      const newApps = state.applications.filter((a) => a.id !== id);
+      saveToStorage(STORAGE_KEY, newApps);
+      return { applications: newApps };
+    }),
 
   getApplicationById: (id) => get().applications.find((a) => a.id === id),
 
   setApprovalRecords: (applicationId, records) =>
-    set((state) => ({
-      approvalRecords: {
+    set((state) => {
+      const newRecords = {
         ...state.approvalRecords,
         [applicationId]: records,
-      },
-    })),
+      };
+      saveToStorage(APPROVAL_STORAGE_KEY, newRecords);
+      return { approvalRecords: newRecords };
+    }),
 
   addApprovalRecord: (applicationId, record) =>
-    set((state) => ({
-      approvalRecords: {
+    set((state) => {
+      const newRecords = {
         ...state.approvalRecords,
         [applicationId]: [
           ...(state.approvalRecords[applicationId] || []),
           record,
         ],
-      },
-    })),
+      };
+      saveToStorage(APPROVAL_STORAGE_KEY, newRecords);
+      return { approvalRecords: newRecords };
+    }),
 
   setHandoverRecord: (applicationId, record) =>
-    set((state) => ({
-      handoverRecords: {
+    set((state) => {
+      const newRecords = {
         ...state.handoverRecords,
         [applicationId]: record,
-      },
-    })),
+      };
+      saveToStorage(HANDOVER_STORAGE_KEY, newRecords);
+      return { handoverRecords: newRecords };
+    }),
 
   confirmHandover: (applicationId, confirmer, remark) => {
     const application = get().getApplicationById(applicationId);
     if (!application) return;
+    if (confirmer.role !== 'admin') return;
 
     const handoverRecord: HandoverRecord = {
       id: `ho_${Date.now()}`,
@@ -266,6 +361,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
           ...application,
           status: next?.status || application.status,
           currentNode: next?.node || application.currentNode,
+          updatedAt: new Date().toISOString(),
         },
         ...state.doneTasks,
       ],
@@ -298,7 +394,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     set((state) => ({
       todoTasks: state.todoTasks.filter((t) => t.id !== applicationId),
       doneTasks: [
-        { ...application, status: 'rejected', currentNode: 'rejected' },
+        { ...application, status: 'rejected', currentNode: 'rejected', updatedAt: new Date().toISOString() },
         ...state.doneTasks,
       ],
     }));
@@ -330,7 +426,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     set((state) => ({
       todoTasks: state.todoTasks.filter((t) => t.id !== applicationId),
       doneTasks: [
-        { ...application, status: 'returned', currentNode: 'returned' },
+        { ...application, status: 'returned', currentNode: 'returned', updatedAt: new Date().toISOString() },
         ...state.doneTasks,
       ],
     }));
@@ -357,12 +453,6 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   },
 
   refreshTodoTasks: (user) => {
-    const node = roleToNodeMap[user.role];
-    if (!node && user.role !== 'admin') {
-      set({ todoTasks: [] });
-      return;
-    }
-
     const allApplications = get().applications;
     let todos: Application[] = [];
 
@@ -387,6 +477,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       );
     }
 
+    todos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     set({ todoTasks: todos });
   },
 
@@ -412,7 +503,9 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
 
     const doneTasks = allApplications
       .filter((a) => handledAppIds.has(a.id))
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      .sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
 
     set({ doneTasks });
   },
@@ -423,4 +516,4 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     get().applications.filter((a) => a.applicantId === applicantId),
 }));
 
-export { nextNodeMap, nodeNameMap, roleToNodeMap };
+export { nextNodeMap, nodeNameMap };

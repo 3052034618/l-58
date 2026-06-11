@@ -52,10 +52,9 @@ const disposalTypeMap: Record<DisposalType, { label: string; color: string }> = 
 const departments = ['技术部', '行政部', '资产管理部', '财务部', '总经办', '市场部', '设计部'];
 const categories = ['IT设备', '办公设备', '家具'];
 const allDisposalTypes: DisposalType[] = ['scrap', 'transfer', 'auction'];
+const archiveOnlyStatuses: ApplicationStatus[] = ['completed', 'archived'];
 const allStatuses: ApplicationStatus[] = [
-  'draft', 'pending_dept', 'pending_admin', 'pending_finance',
-  'pending_handover', 'pending_executive', 'approved', 'rejected',
-  'returned', 'completed', 'archived',
+  'completed', 'archived',
 ];
 
 const lifecycleNodes = [
@@ -107,6 +106,9 @@ export default function Archive() {
 
   const filteredApplications = useMemo(() => {
     return applications.filter((app) => {
+      if (!archiveOnlyStatuses.includes(app.status)) {
+        return false;
+      }
       if (filters.disposalTypes.length > 0 && !filters.disposalTypes.includes(app.type)) {
         return false;
       }
@@ -213,7 +215,12 @@ export default function Archive() {
     document.body.removeChild(link);
   };
 
+  const canDownloadDisposalDoc = (app: Application) => {
+    return app.status === 'completed' || app.status === 'archived';
+  };
+
   const handleDownloadDisposalDoc = (app: Application) => {
+    if (!canDownloadDisposalDoc(app)) return;
     const records = approvalRecords[app.id] || [];
     const handoverRecord = handoverRecords[app.id];
     const content = generateDisposalDoc(app, records, handoverRecord);
@@ -402,20 +409,11 @@ export default function Archive() {
                       )}
                     >
                       {(() => {
-                        const config = {
-                          draft: '草稿',
-                          pending_dept: '待部门审批',
-                          pending_admin: '待行政审核',
-                          pending_finance: '待财务审核',
-                          pending_handover: '待交接',
-                          pending_executive: '待高管审批',
-                          approved: '已审批',
-                          rejected: '已拒绝',
-                          returned: '已退回',
+                        const config: Record<ApplicationStatus, string> = {
                           completed: '已完成',
                           archived: '已归档',
                         };
-                        return config[status];
+                        return config[status] || status;
                       })()}
                     </button>
                   ))}
@@ -612,13 +610,20 @@ export default function Archive() {
                               <Eye className="w-4 h-4" />
                               详情
                             </button>
-                            <button
-                              onClick={() => handleDownloadDisposalDoc(app)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-                            >
-                              <FileDown className="w-4 h-4" />
-                              下载处置单
-                            </button>
+                            {canDownloadDisposalDoc(app) ? (
+                              <button
+                                onClick={() => handleDownloadDisposalDoc(app)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                              >
+                                <FileDown className="w-4 h-4" />
+                                下载处置单
+                              </button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-slate-300 cursor-not-allowed rounded-md">
+                                <FileDown className="w-4 h-4" />
+                                下载处置单
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>

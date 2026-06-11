@@ -35,7 +35,7 @@ const nodeToRole: Record<string, UserRole> = {
   pending_dept: 'dept_head',
   pending_admin: 'admin',
   pending_finance: 'finance',
-  pending_handover: 'dept_head',
+  pending_handover: 'admin',
   pending_executive: 'executive',
 };
 
@@ -52,7 +52,7 @@ const nextNodeMap: Record<string, ApplicationStatus> = {
   pending_admin: 'pending_finance',
   pending_finance: 'pending_handover',
   pending_handover: 'pending_executive',
-  pending_executive: 'approved',
+  pending_executive: 'completed',
 };
 
 const canUserApproveNode = (user: User, node: string, appDepartment: string): boolean => {
@@ -61,9 +61,9 @@ const canUserApproveNode = (user: User, node: string, appDepartment: string): bo
 
   if (user.role === 'executive' && node === 'pending_executive') return true;
   if (user.role === 'finance' && node === 'pending_finance') return true;
-  if (user.role === 'admin' && node === 'pending_admin') return true;
-  if (user.role === 'dept_head' && (node === 'pending_dept' || node === 'pending_handover')) {
-    return node === 'pending_handover' || user.department === appDepartment;
+  if (user.role === 'admin' && (node === 'pending_admin' || node === 'pending_handover')) return true;
+  if (user.role === 'dept_head' && node === 'pending_dept') {
+    return user.department === appDepartment;
   }
   return false;
 };
@@ -140,8 +140,8 @@ router.post('/:id/approve', (req: Request, res: Response): void => {
     app.currentNode = nextNode;
     app.status = nextNode;
   } else {
-    app.currentNode = 'approved';
-    app.status = 'approved';
+    app.currentNode = 'completed';
+    app.status = 'completed';
   }
   app.updatedAt = new Date().toISOString();
 

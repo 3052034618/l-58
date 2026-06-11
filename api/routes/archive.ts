@@ -66,7 +66,7 @@ const disposalTypeName: Record<string, string> = {
 
 router.get('/disposals', (req: Request, res: Response): void => {
   const archivedApps = applications.filter(
-    (a) => a.status === 'completed' || a.status === 'archived' || a.status === 'approved'
+    (a) => a.status === 'completed' || a.status === 'archived'
   );
 
   const records: DisposalRecord[] = archivedApps.map((app) => {
