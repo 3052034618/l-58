@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { applications, approvalRecords, users } from '../data/mockData.js';
+import { applications, approvalRecords, users, persist } from '../data/mockData.js';
 import type { Application, ApplicationStatus, DisposalType } from '../../src/types/index.js';
 
 const router = Router();
@@ -79,19 +79,19 @@ router.post('/', (req: Request, res: Response): void => {
   const body = req.body as Partial<Application>;
 
   const newApp: Application = {
-    id: `app${Date.now()}`,
-    applicationNo: `DISP-${new Date().getFullYear()}-${String(applications.length + 1).padStart(3, '0')}`,
+    id: body.id || `app${Date.now()}`,
+    applicationNo: body.applicationNo || `DISP-${new Date().getFullYear()}-${String(applications.length + 1).padStart(3, '0')}`,
     applicantId: userId,
     applicantName: user.name,
     type: (body.type as DisposalType) || 'scrap',
     reason: body.reason || '',
     department: body.department || user.department,
     estimatedValue: body.estimatedValue || 0,
-    status: 'draft',
+    status: (body.status as ApplicationStatus) || 'draft',
     photos: body.photos || [],
     items: body.items || [],
-    currentNode: 'draft',
-    createdAt: new Date().toISOString(),
+    currentNode: (body.currentNode as string) || 'draft',
+    createdAt: body.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 
@@ -120,6 +120,7 @@ router.put('/:id', (req: Request, res: Response): void => {
     id: applications[index].id,
     updatedAt: new Date().toISOString(),
   };
+  persist();
 
   res.json(success(applications[index], '更新成功'));
 });

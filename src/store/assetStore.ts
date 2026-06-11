@@ -30,6 +30,28 @@ const defaultFilters: AssetFilters = {
   dateRange: null,
 };
 
+const STORAGE_KEY = 'asset_disposal_assets_v1';
+
+function loadFromStorage(): Asset[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw) as Asset[];
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function saveToStorage(assets: Asset[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(assets));
+  } catch {
+    // ignore
+  }
+}
+
 export const useAssetStore = create<AssetState>((set, get) => ({
   assets: [],
   filters: { ...defaultFilters },
@@ -38,23 +60,42 @@ export const useAssetStore = create<AssetState>((set, get) => ({
 
   initializeData: () => {
     if (get().isInitialized) return;
+    const storedAssets = loadFromStorage();
+    const baseAssets = storedAssets || mockAssets;
     set({
-      assets: mockAssets,
+      assets: baseAssets,
       isInitialized: true,
     });
+    if (!storedAssets) {
+      saveToStorage(baseAssets);
+    }
   },
 
-  setAssets: (assets) => set({ assets }),
-  addAsset: (asset) => set((state) => ({ assets: [...state.assets, asset] })),
+  setAssets: (assets) => {
+    set({ assets });
+    saveToStorage(assets);
+  },
+  addAsset: (asset) =>
+    set((state) => {
+      const newAssets = [...state.assets, asset];
+      saveToStorage(newAssets);
+      return { assets: newAssets };
+    }),
   updateAsset: (id, data) =>
-    set((state) => ({
-      assets: state.assets.map((a) => (a.id === id ? { ...a, ...data } : a)),
-    })),
+    set((state) => {
+      const newAssets = state.assets.map((a) =>
+        a.id === id ? { ...a, ...data } : a
+      );
+      saveToStorage(newAssets);
+      return { assets: newAssets };
+    }),
   deleteAsset: (id) =>
-    set((state) => ({
-      assets: state.assets.filter((a) => a.id !== id),
-      selectedAssetIds: state.selectedAssetIds.filter((sid) => sid !== id),
-    })),
+    set((state) => {
+      const newAssets = state.assets.filter((a) => a.id !== id);
+      const newSelectedIds = state.selectedAssetIds.filter((sid) => sid !== id);
+      saveToStorage(newAssets);
+      return { assets: newAssets, selectedAssetIds: newSelectedIds };
+    }),
   getAssetById: (id) => get().assets.find((a) => a.id === id),
   setFilters: (filters) =>
     set((state) => ({ filters: { ...state.filters, ...filters } })),
@@ -68,11 +109,13 @@ export const useAssetStore = create<AssetState>((set, get) => ({
     })),
   clearSelectedAssets: () => set({ selectedAssetIds: [] }),
   batchUpdateStatus: (ids, status) =>
-    set((state) => ({
-      assets: state.assets.map((a) =>
+    set((state) => {
+      const newAssets = state.assets.map((a) =>
         ids.includes(a.id) ? { ...a, status } : a
-      ),
-    })),
+      );
+      saveToStorage(newAssets);
+      return { assets: newAssets };
+    }),
   filteredAssets: () => {
     const { assets, filters } = get();
     return assets.filter((asset) => {

@@ -8,6 +8,7 @@ import type {
   HandoverRecord,
 } from '@/types';
 import { mockApplications, mockApprovalRecords } from '@/mock/data';
+import { api } from '@/utils/apiClient';
 
 interface ApplicationState {
   applications: Application[];
@@ -66,6 +67,7 @@ interface ApplicationState {
   getMyApplications: (applicantId: string) => Application[];
 
   resetAllData: () => void;
+  syncFromApi: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'asset_disposal_applications_v1';
@@ -129,7 +131,10 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   isInitialized: false,
 
   initializeData: () => {
-    if (get().isInitialized) return;
+    if (get().isInitialized) {
+      get().syncFromApi();
+      return;
+    }
 
     const storedApps = loadFromStorage<Application[] | null>(STORAGE_KEY, null);
     const storedRecords = loadFromStorage<Record<string, ApprovalRecord[]> | null>(
@@ -181,6 +186,38 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       handoverRecords: baseHandovers,
       isInitialized: true,
     });
+
+    get().syncFromApi();
+  },
+
+  syncFromApi: async () => {
+    try {
+      const [appsRes, recordsRes] = await Promise.all([
+        api.get<Application[]>('/applications'),
+        api.get<ApprovalRecord[]>('/approvals/records'),
+      ]);
+
+      if (appsRes.code === 0 && appsRes.data) {
+        const apiApps = appsRes.data as Application[];
+        set({ applications: apiApps });
+        saveToStorage(STORAGE_KEY, apiApps);
+      }
+
+      if (recordsRes.code === 0 && recordsRes.data) {
+        const apiRecords = recordsRes.data as ApprovalRecord[];
+        const recordMap: Record<string, ApprovalRecord[]> = {};
+        apiRecords.forEach((r) => {
+          if (!recordMap[r.applicationId]) {
+            recordMap[r.applicationId] = [];
+          }
+          recordMap[r.applicationId].push(r);
+        });
+        set({ approvalRecords: recordMap });
+        saveToStorage(APPROVAL_STORAGE_KEY, recordMap);
+      }
+    } catch {
+      // ignore, use local data
+    }
   },
 
   resetAllData: () => {
@@ -209,7 +246,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     saveToStorage(STORAGE_KEY, applications);
   },
 
-  addApplication: (application) =>
+  addApplication: (application) => {
     set((state) => {
       const newApp = {
         ...application,
@@ -220,8 +257,12 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       };
       const newApps = [...state.applications, newApp];
       saveToStorage(STORAGE_KEY, newApps);
+
+      api.post('/applications', newApp).catch(() => {});
+
       return { applications: newApps };
-    }),
+    });
+  },
 
   updateApplication: (id, data) =>
     set((state) => {
@@ -325,6 +366,10 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
         doneTasks: updatedApp ? [updatedApp, ...state.doneTasks] : state.doneTasks,
       };
     });
+
+    api
+      .post(`/approvals/${applicationId}/approve`, { comment: remark })
+      .catch(() => {});
   },
 
   approve: (applicationId, approver, comment) => {
@@ -366,6 +411,10 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
         ...state.doneTasks,
       ],
     }));
+
+    api
+      .post(`/approvals/${applicationId}/approve`, { comment })
+      .catch(() => {});
   },
 
   reject: (applicationId, approver, comment) => {
@@ -398,6 +447,10 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
         ...state.doneTasks,
       ],
     }));
+
+    api
+      .post(`/approvals/${applicationId}/reject`, { comment })
+      .catch(() => {});
   },
 
   returnBack: (applicationId, approver, comment) => {
@@ -430,6 +483,10 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
         ...state.doneTasks,
       ],
     }));
+
+    api
+      .post(`/approvals/${applicationId}/return`, { comment })
+      .catch(() => {});
   },
 
   transfer: (applicationId, approver, comment, _targetApproverId) => {
@@ -450,6 +507,13 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     };
 
     get().addApprovalRecord(applicationId, record);
+
+    api
+      .post(`/approvals/${applicationId}/transfer`, {
+        targetUserId: _targetApproverId,
+        comment,
+      })
+      .catch(() => {});
   },
 
   refreshTodoTasks: (user) => {

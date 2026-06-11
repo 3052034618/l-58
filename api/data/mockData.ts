@@ -1,21 +1,19 @@
-import type {
-  User,
-  Asset,
-  Application,
-  ApprovalRecord,
-  Valuation,
-} from '../../src/types/index.js';
-
 import {
-  mockUsers,
-  mockAssets,
-  mockApplications,
-  mockApprovalRecords,
-  mockValuations,
-} from '../../src/mock/data.js';
+  users,
+  assets,
+  applications,
+  approvalRecords,
+  valuations,
+  persist,
+  resetDatabase,
+} from './store.js';
 
-export const users: User[] = mockUsers;
-export const assets: Asset[] = mockAssets;
-export const applications: Application[] = mockApplications;
-export const approvalRecords: ApprovalRecord[] = mockApprovalRecords;
-export const valuations: Valuation[] = mockValuations;
+export {
+  users,
+  assets,
+  applications,
+  approvalRecords,
+  valuations,
+  persist,
+  resetDatabase,
+};

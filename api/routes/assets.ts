@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { assets } from '../data/mockData.js';
+import { assets, persist } from '../data/mockData.js';
 import type { Asset, AssetStatus } from '../../src/types/index.js';
 
 const router = Router();
@@ -111,7 +111,7 @@ router.put('/:id', (req: Request, res: Response): void => {
 
   const body = req.body as Partial<Asset>;
   assets[index] = { ...assets[index], ...body, id: assets[index].id };
-
+  persist();
   res.json(success(assets[index], '更新成功'));
 });
 

@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { applications, approvalRecords, users } from '../data/mockData.js';
+import { applications, approvalRecords, users, persist } from '../data/mockData.js';
 import type { ApprovalAction, User, ApplicationStatus, UserRole } from '../../src/types/index.js';
 
 const router = Router();
@@ -67,6 +67,13 @@ const canUserApproveNode = (user: User, node: string, appDepartment: string): bo
   }
   return false;
 };
+
+router.get('/records', (req: Request, res: Response): void => {
+  const sorted = [...approvalRecords].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  res.json(success(sorted));
+});
 
 router.get('/todo', (req: Request, res: Response): void => {
   const user = getCurrentUser(req);
@@ -145,6 +152,7 @@ router.post('/:id/approve', (req: Request, res: Response): void => {
   }
   app.updatedAt = new Date().toISOString();
 
+  persist();
   res.json(success(app, '审批通过'));
 });
 
@@ -182,6 +190,7 @@ router.post('/:id/reject', (req: Request, res: Response): void => {
   app.status = 'rejected';
   app.updatedAt = new Date().toISOString();
 
+  persist();
   res.json(success(app, '已驳回'));
 });
 
@@ -219,6 +228,7 @@ router.post('/:id/return', (req: Request, res: Response): void => {
   app.status = 'returned';
   app.updatedAt = new Date().toISOString();
 
+  persist();
   res.json(success(app, '已退回补充材料'));
 });
 
