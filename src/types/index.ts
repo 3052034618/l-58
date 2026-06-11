@@ -129,3 +129,17 @@ export interface AssetFilters {
   department: string;
   dateRange: [string, string] | null;
 }
+
+export interface HandoverRecord {
+  id: string;
+  applicationId: string;
+  handoverDate: string;
+  receiverName: string;
+  receiverDepartment: string;
+  confirmerId: string;
+  confirmerName: string;
+  confirmerRole: UserRole;
+  assetCount: number;
+  remark: string;
+  status: 'pending' | 'confirmed';
+}

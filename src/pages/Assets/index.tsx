@@ -17,7 +17,6 @@ import StatusTag from '@/components/common/StatusTag';
 import { useAssetStore } from '@/store/assetStore';
 import { useAuthStore } from '@/store/authStore';
 import type { AssetStatus, Asset } from '@/types';
-import { mockAssets } from '@/mock/data';
 
 const PAGE_SIZE = 8;
 
@@ -49,7 +48,6 @@ export default function AssetsPage() {
 
   const {
     assets,
-    setAssets,
     filters,
     setFilters,
     resetFilters,
@@ -59,15 +57,14 @@ export default function AssetsPage() {
     clearSelectedAssets,
     batchUpdateStatus,
     filteredAssets,
+    initializeData,
   } = useAssetStore();
 
   const { user, hasPermission } = useAuthStore();
 
   useEffect(() => {
-    if (assets.length === 0) {
-      setAssets(mockAssets);
-    }
-  }, [assets.length, setAssets]);
+    initializeData();
+  }, [initializeData]);
 
   const list = filteredAssets();
 

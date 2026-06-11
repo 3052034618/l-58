@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -12,19 +13,21 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { useApplicationStore } from '@/store/applicationStore';
+import type { User } from '@/types';
 
 interface MenuItem {
   path: string;
   label: string;
   icon: React.ElementType;
-  badge?: number;
+  showBadge?: boolean;
 }
 
 const menuItems: MenuItem[] = [
   { path: '/dashboard', label: '工作台', icon: LayoutDashboard },
   { path: '/applications', label: '处置申请', icon: FileText },
   { path: '/assets', label: '资产清单', icon: Box },
-  { path: '/approvals', label: '审批看板', icon: ClipboardCheck, badge: 5 },
+  { path: '/approvals', label: '审批看板', icon: ClipboardCheck, showBadge: true },
   { path: '/valuations', label: '估值记录', icon: TrendingUp },
   { path: '/archive', label: '归档查询', icon: Archive },
 ];
@@ -38,6 +41,21 @@ const roleLabels: Record<string, string> = {
 
 export default function Sidebar() {
   const { user, logout } = useAuthStore();
+  const todoTasks = useApplicationStore((s) => s.todoTasks);
+  const refreshTodoTasks = useApplicationStore((s) => s.refreshTodoTasks);
+  const initializeData = useApplicationStore((s) => s.initializeData);
+
+  useEffect(() => {
+    initializeData();
+  }, [initializeData]);
+
+  useEffect(() => {
+    if (user) {
+      refreshTodoTasks(user as User);
+    }
+  }, [user, refreshTodoTasks]);
+
+  const todoCount = todoTasks.length;
 
   return (
     <aside className="w-64 h-screen bg-primary-900 flex flex-col text-white">
@@ -63,9 +81,9 @@ export default function Sidebar() {
               >
                 <item.icon className="w-5 h-5 flex-shrink-0" />
                 <span className="flex-1">{item.label}</span>
-                {item.badge !== undefined && item.badge > 0 && (
+                {item.showBadge && todoCount > 0 && (
                   <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold bg-danger-500 text-white rounded-full">
-                    {item.badge > 99 ? '99+' : item.badge}
+                    {todoCount > 99 ? '99+' : todoCount}
                   </span>
                 )}
               </NavLink>

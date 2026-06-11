@@ -16,15 +16,12 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { useApplicationStore } from '@/store/applicationStore';
 import { useAssetStore } from '@/store/assetStore';
-import {
-  mockApplications,
-  mockAssets,
-} from '@/mock/data';
 import StatusTag from '@/components/common/StatusTag';
 import type {
   UserRole,
   Application,
   DisposalType,
+  User,
 } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -158,33 +155,31 @@ function QuickAction({ label, icon: Icon, onClick }: QuickActionProps) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const setApplications = useApplicationStore((s) => s.setApplications);
-  const setTodoTasks = useApplicationStore((s) => s.setTodoTasks);
+  const initializeApplicationData = useApplicationStore((s) => s.initializeData);
+  const refreshTodoTasks = useApplicationStore((s) => s.refreshTodoTasks);
+  const refreshDoneTasks = useApplicationStore((s) => s.refreshDoneTasks);
   const todoTasks = useApplicationStore((s) => s.todoTasks);
   const applications = useApplicationStore((s) => s.applications);
-  const setAssets = useAssetStore((s) => s.setAssets);
+  const initializeAssetData = useAssetStore((s) => s.initializeData);
+  const assets = useAssetStore((s) => s.assets);
 
   useEffect(() => {
-    setApplications(mockApplications);
-    setAssets(mockAssets);
+    initializeApplicationData();
+    initializeAssetData();
+  }, [initializeApplicationData, initializeAssetData]);
+
+  useEffect(() => {
     if (user) {
-      const roleNodeMap: Record<UserRole, string> = {
-        dept_head: 'pending_dept',
-        admin: 'pending_admin',
-        finance: 'pending_finance',
-        executive: 'pending_executive',
-      };
-      const node = roleNodeMap[user.role];
-      const todos = mockApplications.filter((a) => a.currentNode === node);
-      setTodoTasks(todos);
+      refreshTodoTasks(user as User);
+      refreshDoneTasks(user as User);
     }
-  }, [setApplications, setAssets, setTodoTasks, user]);
+  }, [user, refreshTodoTasks, refreshDoneTasks]);
 
   const stats = useMemo(() => {
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const monthlyCompleted = mockApplications.filter((a) => {
+    const monthlyCompleted = applications.filter((a) => {
       const created = new Date(a.createdAt);
       return (
         created >= thisMonthStart &&
@@ -197,11 +192,11 @@ export default function Dashboard() {
       0
     );
 
-    const pendingValuation = mockAssets.filter(
+    const pendingValuation = assets.filter(
       (a) => a.status === 'pending_disposal'
     ).length;
 
-    const totalValue = mockAssets.reduce(
+    const totalValue = assets.reduce(
       (sum, a) => sum + a.netValue,
       0
     );
@@ -212,7 +207,7 @@ export default function Dashboard() {
       pendingValuation,
       totalValue,
     };
-  }, [todoTasks]);
+  }, [todoTasks, applications, assets]);
 
   const recentApplications = useMemo(() => {
     return [...applications]

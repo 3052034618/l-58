@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Search,
   Check,
@@ -14,6 +14,7 @@ import {
   Building2,
   User,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import StatusTag from '@/components/common/StatusTag';
 import ApprovalTimeline from '@/components/business/ApprovalTimeline';
@@ -21,8 +22,6 @@ import { useAssetStore } from '@/store/assetStore';
 import { useApplicationStore } from '@/store/applicationStore';
 import { useAuthStore } from '@/store/authStore';
 import type { Asset, DisposalType, ApplicationItem } from '@/types';
-import { useEffect } from 'react';
-import { mockAssets } from '@/mock/data';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -68,6 +67,7 @@ const approvalNodes = [
 ];
 
 export default function ApplicationPage() {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -82,15 +82,24 @@ export default function ApplicationPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { assets, setAssets } = useAssetStore();
-  const { addApplication } = useApplicationStore();
+  const { assets, initializeData: initializeAssetData, isInitialized: isAssetInitialized } = useAssetStore();
+  const { addApplication, initializeData: initializeApplicationData, isInitialized: isApplicationInitialized } = useApplicationStore();
   const { user } = useAuthStore();
 
   useEffect(() => {
-    if (assets.length === 0) {
-      setAssets(mockAssets);
+    if (!isAssetInitialized) {
+      initializeAssetData();
     }
-  }, [assets.length, setAssets]);
+    if (!isApplicationInitialized) {
+      initializeApplicationData();
+    }
+  }, [isAssetInitialized, isApplicationInitialized, initializeAssetData, initializeApplicationData]);
+
+  useEffect(() => {
+    if (user?.role === 'dept_head' && !formData.department) {
+      setFormData((prev) => ({ ...prev, department: user.department }));
+    }
+  }, [user]);
 
   const filteredAssets = useMemo(() => {
     if (!searchKeyword.trim()) return assets;
@@ -207,17 +216,22 @@ export default function ApplicationPage() {
     };
 
     addApplication(application);
-    alert('申请提交成功！');
-    setCurrentStep(1);
-    setSelectedAssetIds([]);
-    setFormData({
-      type: 'scrap',
-      reason: '',
-      department: '',
-      estimatedValue: 0,
-      remark: '',
-      photos: [],
-    });
+
+    const goToApproval = window.confirm('申请提交成功！是否跳转到审批看板查看？');
+    if (goToApproval) {
+      navigate('/approvals');
+    } else {
+      setCurrentStep(1);
+      setSelectedAssetIds([]);
+      setFormData({
+        type: 'scrap',
+        reason: '',
+        department: user?.role === 'dept_head' ? user.department : '',
+        estimatedValue: 0,
+        remark: '',
+        photos: [],
+      });
+    }
   };
 
   const canGoNext = () => {

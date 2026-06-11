@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   ChevronDown,
@@ -28,6 +28,8 @@ import StatusTag from '@/components/common/StatusTag';
 import { useApplicationStore } from '@/store/applicationStore';
 import { useAssetStore } from '@/store/assetStore';
 import { useAuthStore } from '@/store/authStore';
+import { generateDisposalDoc } from '@/utils/exportDisposal';
+import { downloadTextFile } from '@/utils/downloadFile';
 import type { Application, DisposalType, ApplicationStatus, Asset } from '@/types';
 
 type TabType = 'ledger' | 'lifecycle';
@@ -84,8 +86,13 @@ export default function Archive() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
   const { user, hasPermission } = useAuthStore();
-  const { applications } = useApplicationStore();
-  const { assets } = useAssetStore();
+  const { applications, approvalRecords, handoverRecords, initializeData: initApplicationData } = useApplicationStore();
+  const { assets, initializeData: initAssetData } = useAssetStore();
+
+  useEffect(() => {
+    initApplicationData();
+    initAssetData();
+  }, [initApplicationData, initAssetData]);
 
   const [filters, setFilters] = useState<ArchiveFilters>({
     disposalTypes: [],
@@ -204,6 +211,13 @@ export default function Archive() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDownloadDisposalDoc = (app: Application) => {
+    const records = approvalRecords[app.id] || [];
+    const handoverRecord = handoverRecords[app.id];
+    const content = generateDisposalDoc(app, records, handoverRecord);
+    downloadTextFile(content, `处置单_${app.applicationNo}.txt`);
   };
 
   const generateLifecycleData = (asset: Asset) => {
@@ -598,9 +612,12 @@ export default function Archive() {
                               <Eye className="w-4 h-4" />
                               详情
                             </button>
-                            <button className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors">
+                            <button
+                              onClick={() => handleDownloadDisposalDoc(app)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                            >
                               <FileDown className="w-4 h-4" />
-                              下载
+                              下载处置单
                             </button>
                           </div>
                         </td>

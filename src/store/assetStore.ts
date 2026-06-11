@@ -1,10 +1,13 @@
 import { create } from 'zustand';
 import type { Asset, AssetFilters, AssetStatus } from '@/types';
+import { mockAssets } from '@/mock/data';
 
 interface AssetState {
   assets: Asset[];
   filters: AssetFilters;
   selectedAssetIds: string[];
+  isInitialized: boolean;
+  initializeData: () => void;
   setAssets: (assets: Asset[]) => void;
   addAsset: (asset: Asset) => void;
   updateAsset: (id: string, data: Partial<Asset>) => void;
@@ -31,6 +34,16 @@ export const useAssetStore = create<AssetState>((set, get) => ({
   assets: [],
   filters: { ...defaultFilters },
   selectedAssetIds: [],
+  isInitialized: false,
+
+  initializeData: () => {
+    if (get().isInitialized) return;
+    set({
+      assets: mockAssets,
+      isInitialized: true,
+    });
+  },
+
   setAssets: (assets) => set({ assets }),
   addAsset: (asset) => set((state) => ({ assets: [...state.assets, asset] })),
   updateAsset: (id, data) =>

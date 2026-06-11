@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ClipboardList,
   History,
@@ -13,9 +13,10 @@ import {
   Banknote,
   GitBranch,
   ArrowRightLeft,
+  PackageCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useApplicationStore } from '@/store/applicationStore';
+import { useApplicationStore, nodeNameMap } from '@/store/applicationStore';
 import { useAuthStore } from '@/store/authStore';
 import Modal from '@/components/common/Modal';
 import StatusTag from '@/components/common/StatusTag';
@@ -44,14 +45,6 @@ const allNodes = [
   { node: 'pending_executive', nodeName: '高管终审' },
 ];
 
-const nextNodeMap: Record<string, { status: Application['status']; node: string } | null> = {
-  pending_dept: { status: 'pending_admin', node: 'pending_admin' },
-  pending_admin: { status: 'pending_finance', node: 'pending_finance' },
-  pending_finance: { status: 'pending_handover', node: 'pending_handover' },
-  pending_handover: { status: 'pending_executive', node: 'pending_executive' },
-  pending_executive: { status: 'approved', node: 'approved' },
-};
-
 function formatDate(dateStr: string) {
   const date = new Date(dateStr);
   return date.toLocaleString('zh-CN', {
@@ -72,7 +65,20 @@ function formatCurrency(value: number) {
 }
 
 export default function Approval() {
-  const { todoTasks, doneTasks, approvalRecords, approve, reject, returnBack, transfer } = useApplicationStore();
+  const {
+    todoTasks,
+    doneTasks,
+    approvalRecords,
+    approve,
+    reject,
+    returnBack,
+    transfer,
+    confirmHandover,
+    initializeData,
+    refreshTodoTasks,
+    refreshDoneTasks,
+    isInitialized,
+  } = useApplicationStore();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -84,6 +90,21 @@ export default function Approval() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
   const [showReturnForm, setShowReturnForm] = useState(false);
+  const [showHandoverModal, setShowHandoverModal] = useState(false);
+  const [handoverRemark, setHandoverRemark] = useState('');
+
+  useEffect(() => {
+    if (!isInitialized) {
+      initializeData();
+    }
+  }, [isInitialized, initializeData]);
+
+  useEffect(() => {
+    if (user) {
+      refreshTodoTasks(user);
+      refreshDoneTasks(user);
+    }
+  }, [user, refreshTodoTasks, refreshDoneTasks]);
 
   const filteredTodoTasks = useMemo(() => {
     return todoTasks.filter((task) => {
@@ -100,18 +121,16 @@ export default function Approval() {
 
   function handleQuickPass(application: Application) {
     if (!user) return;
-    const next = nextNodeMap[application.currentNode];
-    if (next) {
-      approve(application.id, user, '快速通过', next.status, next.node);
+    if (application.currentNode === 'pending_handover') {
+      confirmHandover(application.id, user, '快速交接确认');
+    } else {
+      approve(application.id, user, '快速通过');
     }
   }
 
   function handleApprove() {
     if (!selectedApplication || !user) return;
-    const next = nextNodeMap[selectedApplication.currentNode];
-    if (next) {
-      approve(selectedApplication.id, user, '同意', next.status, next.node);
-    }
+    approve(selectedApplication.id, user, '同意');
     setSelectedApplication(null);
   }
 
@@ -134,6 +153,14 @@ export default function Approval() {
     transfer(selectedApplication.id, user, `转交给 ${transferTarget}`, transferTarget);
     setShowTransferModal(false);
     setTransferTarget('');
+  }
+
+  function handleConfirmHandover() {
+    if (!selectedApplication || !user) return;
+    confirmHandover(selectedApplication.id, user, handoverRemark);
+    setSelectedApplication(null);
+    setShowHandoverModal(false);
+    setHandoverRemark('');
   }
 
   return (
@@ -354,16 +381,30 @@ export default function Approval() {
                       <Eye className="w-4 h-4" />
                       查看详情
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleQuickPass(task);
-                      }}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-secondary-500 text-white rounded-lg text-sm font-medium hover:bg-secondary-600 transition-colors"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      快速通过
-                    </button>
+                    {task.currentNode === 'pending_handover' ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedApplication(task);
+                          setShowHandoverModal(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors"
+                      >
+                        <PackageCheck className="w-4 h-4" />
+                        确认交接
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickPass(task);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-secondary-500 text-white rounded-lg text-sm font-medium hover:bg-secondary-600 transition-colors"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        快速通过
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -444,7 +485,7 @@ export default function Approval() {
       )}
 
       <Modal
-        open={!!selectedApplication}
+        open={!!selectedApplication && !showHandoverModal}
         onClose={() => {
           setSelectedApplication(null);
           setReturnReason('');
@@ -463,7 +504,15 @@ export default function Approval() {
                 转交他人
               </button>
               <div className="flex items-center gap-3">
-                {showReturnForm ? (
+                {selectedApplication.currentNode === 'pending_handover' ? (
+                  <button
+                    onClick={() => setShowHandoverModal(true)}
+                    className="px-6 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors flex items-center gap-1.5"
+                  >
+                    <PackageCheck className="w-4 h-4" />
+                    确认交接
+                  </button>
+                ) : showReturnForm ? (
                   <div className="flex items-center gap-3 flex-1">
                     <input
                       type="text"
@@ -641,6 +690,71 @@ export default function Approval() {
           </div>
           <p className="text-xs text-slate-500">
             转交后，该审批任务将由被转交人处理，您将不再收到该任务的提醒。
+          </p>
+        </div>
+      </Modal>
+
+      <Modal
+        open={showHandoverModal}
+        onClose={() => {
+          setShowHandoverModal(false);
+          setHandoverRemark('');
+        }}
+        title="实物交接确认"
+        width="max-w-md"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => {
+                setShowHandoverModal(false);
+                setHandoverRemark('');
+              }}
+              className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleConfirmHandover}
+              className="px-6 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors flex items-center gap-1.5"
+            >
+              <PackageCheck className="w-4 h-4" />
+              确认交接
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {selectedApplication && (
+            <div className="bg-primary-50 rounded-lg p-4 border border-primary-100">
+              <div className="flex items-center gap-2 mb-2">
+                <PackageCheck className="w-5 h-5 text-primary-500" />
+                <span className="font-medium text-primary-700">交接信息</span>
+              </div>
+              <div className="space-y-1 text-sm">
+                <p className="text-slate-600">
+                  申请编号：<span className="font-mono text-slate-900">{selectedApplication.applicationNo}</span>
+                </p>
+                <p className="text-slate-600">
+                  资产数量：<span className="font-medium text-slate-900">{selectedApplication.items.length} 件</span>
+                </p>
+                <p className="text-slate-600">
+                  接收部门：<span className="font-medium text-slate-900">{selectedApplication.department}</span>
+                </p>
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">交接备注</label>
+            <textarea
+              rows={4}
+              value={handoverRemark}
+              onChange={(e) => setHandoverRemark(e.target.value)}
+              placeholder="请填写交接备注信息..."
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 resize-none"
+            />
+          </div>
+          <p className="text-xs text-slate-500">
+            确认交接后，实物交接节点完成，申请将进入下一审批环节。
           </p>
         </div>
       </Modal>

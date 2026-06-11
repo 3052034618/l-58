@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   TrendingUp,
   Plus,
@@ -15,9 +15,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { useValuationStore } from '@/store/valuationStore';
+import { useAssetStore } from '@/store/assetStore';
 import Modal from '@/components/common/Modal';
 import StatusTag from '@/components/common/StatusTag';
-import { mockValuations, mockAssets } from '@/mock/data';
+import { mockAssets } from '@/mock/data';
 import type { Valuation, ValuationMethod } from '@/types';
 
 const valuationMethodLabels: Record<ValuationMethod, string> = {
@@ -53,13 +55,19 @@ function formatDate(dateStr: string) {
 
 export default function Valuation() {
   const { hasPermission } = useAuthStore();
+  const { valuations, addValuation, initializeData: initValuationData } = useValuationStore();
+  const { assets, initializeData: initAssetData } = useAssetStore();
   const canCreateValuation = hasPermission('createValuation');
 
   const [activeTab, setActiveTab] = useState<'list' | 'analysis'>('list');
   const [methodFilter, setMethodFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [valuations, setValuations] = useState<Valuation[]>(mockValuations);
+
+  useEffect(() => {
+    initValuationData();
+    initAssetData();
+  }, [initValuationData, initAssetData]);
 
   const [newValuation, setNewValuation] = useState({
     assetId: '',
@@ -106,7 +114,7 @@ export default function Valuation() {
     const categoryMap = new Map<string, { original: number; net: number; value: number; count: number }>();
 
     valuations.forEach((v) => {
-      const asset = mockAssets.find((a) => a.id === v.assetId);
+      const asset = assets.find((a) => a.id === v.assetId);
       const category = asset?.category || '其他';
       const existing = categoryMap.get(category) || { original: 0, net: 0, value: 0, count: 0 };
       categoryMap.set(category, {
@@ -121,7 +129,7 @@ export default function Valuation() {
       category,
       ...data,
     }));
-  }, [valuations]);
+  }, [valuations, assets]);
 
   const maxValue = useMemo(() => {
     let max = 0;
@@ -138,7 +146,7 @@ export default function Valuation() {
   function handleCreate() {
     if (!newValuation.assetId || !newValuation.method || !newValuation.value) return;
 
-    const asset = mockAssets.find((a) => a.id === newValuation.assetId);
+    const asset = assets.find((a) => a.id === newValuation.assetId);
     if (!asset) return;
 
     const valuation: Valuation = {
@@ -159,7 +167,7 @@ export default function Valuation() {
       createdAt: new Date().toISOString(),
     };
 
-    setValuations([valuation, ...valuations]);
+    addValuation(valuation);
     setShowCreateModal(false);
     setNewValuation({ assetId: '', method: '', value: '', basis: '' });
     setFileName('');
@@ -545,7 +553,7 @@ export default function Valuation() {
               className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
             >
               <option value="">请选择需要估值的资产</option>
-              {mockAssets.map((asset) => (
+              {assets.map((asset) => (
                 <option key={asset.id} value={asset.id}>
                   {asset.assetNo} - {asset.name}（净值: {formatCurrency(asset.netValue)}）
                 </option>

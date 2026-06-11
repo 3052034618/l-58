@@ -2,11 +2,18 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useApplicationStore } from '@/store/applicationStore';
+import { useAssetStore } from '@/store/assetStore';
 import { mockUsers } from '@/mock/data';
+import type { User } from '@/types';
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuthStore();
+  const initializeApplicationData = useApplicationStore((s) => s.initializeData);
+  const refreshTodoTasks = useApplicationStore((s) => s.refreshTodoTasks);
+  const refreshDoneTasks = useApplicationStore((s) => s.refreshDoneTasks);
+  const initializeAssetData = useAssetStore((s) => s.initializeData);
   const [selectedUserId, setSelectedUserId] = useState(mockUsers[0].id);
 
   const roleLabels: Record<string, string> = {
@@ -20,6 +27,10 @@ export default function Login() {
     const user = mockUsers.find((u) => u.id === selectedUserId);
     if (user) {
       login(user);
+      initializeApplicationData();
+      initializeAssetData();
+      refreshTodoTasks(user as User);
+      refreshDoneTasks(user as User);
       navigate('/dashboard');
     }
   };
