@@ -83,7 +83,12 @@ export default function ApplicationPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { assets, initializeData: initializeAssetData, isInitialized: isAssetInitialized } = useAssetStore();
-  const { addApplication, initializeData: initializeApplicationData, isInitialized: isApplicationInitialized } = useApplicationStore();
+  const {
+    addApplication,
+    initializeData: initializeApplicationData,
+    isInitialized: isApplicationInitialized,
+    refreshTodoTasks,
+  } = useApplicationStore();
   const { user } = useAuthStore();
 
   useEffect(() => {
@@ -216,6 +221,10 @@ export default function ApplicationPage() {
     };
 
     addApplication(application);
+
+    if (user) {
+      refreshTodoTasks(user);
+    }
 
     const goToApproval = window.confirm('申请提交成功！是否跳转到审批看板查看？');
     if (goToApproval) {

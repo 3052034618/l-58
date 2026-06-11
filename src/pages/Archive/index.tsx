@@ -52,10 +52,17 @@ const disposalTypeMap: Record<DisposalType, { label: string; color: string }> = 
 const departments = ['技术部', '行政部', '资产管理部', '财务部', '总经办', '市场部', '设计部'];
 const categories = ['IT设备', '办公设备', '家具'];
 const allDisposalTypes: DisposalType[] = ['scrap', 'transfer', 'auction'];
+const statusLabelMap: Partial<Record<ApplicationStatus, string>> = {
+  completed: '已完成',
+  archived: '已归档',
+};
+
+function getStatusLabel(status: ApplicationStatus): string {
+  return statusLabelMap[status] || status;
+}
+
 const archiveOnlyStatuses: ApplicationStatus[] = ['completed', 'archived'];
-const allStatuses: ApplicationStatus[] = [
-  'completed', 'archived',
-];
+const allStatuses: ApplicationStatus[] = ['completed', 'archived'];
 
 const lifecycleNodes = [
   { key: 'inbound', label: '入库', icon: Package, color: 'bg-slate-500' },
@@ -408,13 +415,7 @@ export default function Archive() {
                           : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                       )}
                     >
-                      {(() => {
-                        const config: Record<ApplicationStatus, string> = {
-                          completed: '已完成',
-                          archived: '已归档',
-                        };
-                        return config[status] || status;
-                      })()}
+                      {getStatusLabel(status)}
                     </button>
                   ))}
                 </div>
